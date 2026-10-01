@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Malware Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;700&family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+[hidden]{display:none!important}
+html{color-scheme:light}
+body{margin:0}
+/* Layout: reverse-engineering lab — status strip, then three tiered "clearance" bands (Easy / Medium / Hard) of sample cards; the case sheet opens as an overlay */
+:root{
+  --bg:#f2f3f5; --surface:#ffffff; --sunk:#e8eaee; --line:#d0d4db;
+  --fg:#1b1f27; --muted:#5a6170; --accent:#5b4bd6; --accent-fg:#ffffff;
+  --easy:#2f7d4a; --med:#b06d00; --hard:#b3372b; --ok:#2f7d4a; --bad:#b3372b;
+  --f-display:"Familjen Grotesk","Helvetica Neue",Arial,sans-serif;
+  --f-body:"Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+  --r:6px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#111318; --surface:#181b22; --sunk:#0c0e12; --line:#2a2f3a;
+  --fg:#e4e6ec; --muted:#959cab; --accent:#9d90ff; --accent-fg:#14102e;
+  --easy:#6fcf8e; --med:#f0b429; --hard:#ef7a6c; --ok:#6fcf8e; --bad:#ef7a6c; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#111318; --surface:#181b22; --sunk:#0c0e12; --line:#2a2f3a;
+  --fg:#e4e6ec; --muted:#959cab; --accent:#9d90ff; --accent-fg:#14102e;
+  --easy:#6fcf8e; --med:#f0b429; --hard:#ef7a6c; --ok:#6fcf8e; --bad:#ef7a6c; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font:15px/1.55 var(--f-body)}
+.wrap{max-width:1080px;margin:0 auto;padding-inline:16px;padding-block:24px 64px;display:grid;gap:24px}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;line-height:1.15}
+h1{font-size:clamp(28px,5vw,40px);letter-spacing:-.01em}
+.eyebrow{font:600 12px/1 var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.mono{font-family:var(--f-mono)}
+button,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.intro{display:grid;gap:8px;max-width:62ch}
+.intro p{margin:0;color:var(--muted)}
+.status{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px}
+.stat{display:grid;gap:4px}
+.stat b{font:700 22px/1 var(--f-display);font-variant-numeric:tabular-nums}
+.stat span{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+.rank{font:600 13px/1 var(--f-mono);background:var(--accent);color:var(--accent-fg);padding:6px 10px;border-radius:3px}
+.bar{flex:1 1 160px;height:8px;background:var(--sunk);border-radius:4px;overflow:hidden;min-width:120px}
+.bar i{display:block;height:100%;background:var(--accent);width:0;transition:width .4s}
+.name{display:flex;gap:8px;align-items:center}
+.name input{background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:6px 8px;width:150px}
+nav.tabs{display:flex;gap:8px;flex-wrap:wrap;border-bottom:1px solid var(--line)}
+nav.tabs button{background:none;border:0;border-bottom:2px solid transparent;padding:8px 4px;margin-right:12px;color:var(--muted);font-weight:600}
+nav.tabs button[aria-selected="true"]{color:var(--fg);border-color:var(--accent)}
+
+.tier{display:grid;gap:12px}
+.tier-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.tier-head h2{font-size:22px}
+.tier-head .lvl{font:700 12px/1 var(--f-mono);letter-spacing:.12em;text-transform:uppercase;padding:5px 8px;border-radius:3px;border:1.5px solid currentColor}
+.tier-head p{margin:0;color:var(--muted);font-size:14px;flex:1 1 260px}
+.tier-head .count{font:600 13px/1 var(--f-mono);color:var(--muted);font-variant-numeric:tabular-nums}
+.easy{color:var(--easy)} .medium{color:var(--med)} .hard{color:var(--hard)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px}
+.card{text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px 16px 14px;display:grid;gap:10px;align-content:start;transition:transform .15s,border-color .15s;border-top-width:3px}
+.card.easy{border-top-color:var(--easy)} .card.medium{border-top-color:var(--med)} .card.hard{border-top-color:var(--hard)}
+.card:hover{transform:translateY(-2px)}
+.card *{color:var(--fg)}
+.card .row{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.pts{font:700 15px/1 var(--f-mono);font-variant-numeric:tabular-nums}
+.card h3{font-size:19px}
+.card p{margin:0;font-size:13px;color:var(--muted)}
+.card .id{font:12px/1 var(--f-mono);color:var(--muted)}
+.card.solved{border-color:var(--ok)}
+.stamp{font:700 11px/1 var(--f-mono);letter-spacing:.1em;color:var(--ok)!important;border:1.5px solid var(--ok);padding:4px 6px;border-radius:3px;transform:rotate(-4deg)}
+.skill{font:600 11px/1 var(--f-mono);color:var(--muted)!important;letter-spacing:.04em}
+
+.overlay{position:fixed;inset:0;background:rgb(0 0 0 / .5);display:flex;justify-content:center;align-items:flex-start;padding:max(24px,env(safe-area-inset-top,0px)) 16px 24px;overflow-y:auto;z-index:10}
+.sheet{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);width:100%;max-width:840px;padding:24px;display:grid;gap:18px;min-width:0}
+.sheet-head{display:flex;justify-content:space-between;gap:12px;align-items:start}
+.sheet-head > div{display:grid;gap:6px;min-width:0}
+.x{background:var(--sunk);border:1px solid var(--line);border-radius:4px;width:34px;height:34px;flex:none}
+.brief{margin:0;max-width:70ch}
+.evidence{display:grid;gap:6px;min-width:0}
+.evidence label{font:600 12px/1 var(--f-mono);color:var(--muted);letter-spacing:.06em}
+pre{margin:0;background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:12px;overflow-x:auto;font:12.5px/1.55 var(--f-mono);white-space:pre}
+.q{border-left:3px solid var(--accent);padding-left:12px;font-weight:600;max-width:70ch;margin:0}
+.submit{display:flex;gap:8px;flex-wrap:wrap}
+.submit input{flex:1 1 240px;min-width:0;background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:10px 12px;font-family:var(--f-mono)}
+.btn{background:var(--accent);color:var(--accent-fg);border:0;border-radius:4px;padding:10px 16px;font-weight:600}
+.btn.ghost{background:transparent;color:var(--fg);border:1px solid var(--line)}
+.msg{font-size:14px;min-height:1.2em;margin:0}
+.msg.ok{color:var(--ok)} .msg.bad{color:var(--bad)}
+.hint{background:var(--sunk);border:1px dashed var(--line);border-radius:4px;padding:10px 12px;font-size:14px;margin:0}
+
+.tools{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+.tool{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:grid;gap:10px;min-width:0}
+.tool p{margin:0;font-size:13px;color:var(--muted)}
+.tool textarea{width:100%;min-height:90px;background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:8px;font:12.5px/1.5 var(--f-mono);resize:vertical}
+.tool .opts{display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:13px}
+.tool .opts input[type=text]{width:120px;background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:6px 8px;font-family:var(--f-mono)}
+.tool pre{min-height:48px;white-space:pre-wrap;word-break:break-all}
+.rules{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:20px;max-width:74ch;display:grid;gap:10px}
+.rules ul{margin:0;padding-left:20px;display:grid;gap:6px}
+.danger{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+@media (max-width:520px){.sheet{padding:16px}}
+</style>
+</head>
+<body>
+
+
+<div class="wrap">
+  <header class="intro">
+    <span class="eyebrow">Malware analysis track · 12 samples</span>
+    <h1>Malware Lab</h1>
+    <p>Twelve reverse-engineering challenges in three levels. Start with Easy to learn the basics, then move up to Medium and Hard. Every sample, domain and IP here is fake and harmless.</p>
+  </header>
+
+  <section class="status" aria-label="Your progress">
+    <div class="stat"><b id="score">0</b><span>Points</span></div>
+    <div class="stat"><b id="solvedCount">0/12</b><span>Solved</span></div>
+    <span class="rank" id="rank">Trainee</span>
+    <div class="bar" aria-hidden="true"><i id="barFill"></i></div>
+    <div class="name"><label for="player" class="eyebrow">Analyst</label><input id="player" type="text" placeholder="Your name" maxlength="24"></div>
+  </section>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" aria-selected="true" data-tab="board" id="tab-board">Challenges</button>
+    <button role="tab" aria-selected="false" data-tab="toolbox" id="tab-toolbox">Toolbox</button>
+    <button role="tab" aria-selected="false" data-tab="rules" id="tab-rules">How to play</button>
+  </nav>
+
+  <section id="board" style="display:grid;gap:32px"></section>
+
+  <section id="toolbox" hidden>
+    <div class="tools">
+      <div class="tool">
+        <h3>Base64 decode</h3>
+        <textarea id="b64in" placeholder="Paste Base64 here"></textarea>
+        <div class="opts"><label><input type="checkbox" id="b64utf16"> UTF-16LE output</label></div>
+        <pre id="b64out"></pre>
+      </div>
+      <div class="tool">
+        <h3>XOR</h3>
+        <p>Single or multi-byte key. Key is hex, e.g. <span class="mono">5a</span> or <span class="mono">41 42 43 44</span>.</p>
+        <textarea id="xorin" placeholder="Hex bytes"></textarea>
+        <div class="opts"><label for="xorkey">Key</label><input type="text" id="xorkey" value="00"></div>
+        <pre id="xorout"></pre>
+      </div>
+      <div class="tool">
+        <h3>Hex to text</h3>
+        <textarea id="hexin" placeholder="48 65 6c 6c 6f"></textarea>
+        <pre id="hexout"></pre>
+      </div>
+      <div class="tool">
+        <h3>Unix time to date</h3>
+        <p>Accepts decimal or hex (0x...). Tick the box if you copied raw little-endian bytes.</p>
+        <div class="opts"><input type="text" id="tsin" style="width:200px" value="0x5F5E1000"><label><input type="checkbox" id="tsle"> Bytes are little-endian</label></div>
+        <pre id="tsout"></pre>
+      </div>
+    </div>
+  </section>
+
+  <section id="rules" hidden>
+    <div class="rules">
+      <h2>How to play</h2>
+      <ul>
+        <li>Flags look like <span class="mono">nc4{answer}</span> and are not case-sensitive. You can also type just the answer.</li>
+        <li>Easy is 100 points, Medium is 200, Hard is 300. A hint cuts that challenge's points by half.</li>
+        <li>The Toolbox covers Easy and Medium. For Hard you will want CyberChef or a few lines of Python.</li>
+        <li>Progress is saved in this browser only.</li>
+        <li>All samples are simulated text. Domains use <span class="mono">.example</span> and IPs use documentation ranges.</li>
+      </ul>
+      <div class="danger">
+        <button class="btn ghost" id="resetBtn" type="button">Reset my progress</button>
+        <span id="resetConfirm" hidden>Are you sure? <button class="btn" id="resetYes" type="button">Yes, reset</button> <button class="btn ghost" id="resetNo" type="button">Cancel</button></span>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div class="overlay" id="overlay" hidden>
+  <article class="sheet" role="dialog" aria-modal="true" aria-labelledby="sTitle">
+    <div class="sheet-head">
+      <div>
+        <span class="tier-head"><span class="lvl" id="sLvl"></span></span>
+        <h2 id="sTitle"></h2>
+        <span class="eyebrow" id="sMeta"></span>
+      </div>
+      <button class="x" id="closeBtn" aria-label="Close" type="button">✕</button>
+    </div>
+    <p class="brief" id="sBrief"></p>
+    <div id="sEvidence" style="display:grid;gap:14px"></div>
+    <p class="q" id="sQ"></p>
+    <form class="submit" id="flagForm">
+      <input id="flagIn" type="text" placeholder="nc4{...}" autocomplete="off" spellcheck="false">
+      <button class="btn" type="submit">Submit flag</button>
+      <button class="btn ghost" type="button" id="hintBtn">Show hint (−50%)</button>
+    </form>
+    <p class="msg" id="sMsg" aria-live="polite"></p>
+    <p class="hint" id="sHint" hidden></p>
+  </article>
+</div>
+
+<script>
+const D = {"b64twice": "WTJablgydGxlVDF1WXpSN1lqWTBYM1IzTVdObFgybHpYMjR3ZEY5bGJtTnllWEIwTVRCdWZRPT0=", "compile": "00000000  4d 5a 90 00 03 00 00 00 04 00 00 00 ff ff 00 00  |MZ..............|\n00000010  b8 00 00 00 00 00 00 00 40 00 00 00 00 00 00 00  |........@.......|\n00000020  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|\n00000030  00 00 00 00 00 00 00 00 00 00 00 00 80 00 00 00  |................|\n00000040  0e 1f ba 0e 00 b4 09 cd 21 b8 01 4c cd 21 54 68  |........!..L.!Th|\n00000050  69 73 20 70 72 6f 67 72 61 6d 20 63 61 6e 6e 6f  |is program canno|\n00000060  74 20 62 65 20 72 75 6e 20 69 6e 20 44 4f 53 20  |t be run in DOS |\n00000070  6d 6f 64 65 2e 0d 0d 0a 24 00 00 00 00 00 00 00  |mode....$.......|\n00000080  50 45 00 00 64 86 06 00 87 ab 8f 6a 00 00 00 00  |PE..d......j....|\n00000090  00 00 00 00 f0 00 22 00 0b 02 0e 24 00 9e 01 00  |......\"....$....|", "compile_ts": "0x6a8fab87", "stack": "0000000140001A20  mov  byte ptr [rbp-30h], 73h\n0000000140001A24  mov  byte ptr [rbp-34h], 72h\n0000000140001A28  mov  byte ptr [rbp-37h], 5Fh\n0000000140001A2C  mov  byte ptr [rbp-27h], 7Dh\n0000000140001A30  mov  byte ptr [rbp-2Dh], 33h\n0000000140001A34  mov  byte ptr [rbp-3Ah], 34h\n0000000140001A38  mov  byte ptr [rbp-3Bh], 74h\n0000000140001A3C  mov  byte ptr [rbp-36h], 73h\n0000000140001A40  mov  byte ptr [rbp-31h], 67h\n0000000140001A44  mov  byte ptr [rbp-2Ah], 31h\n0000000140001A48  mov  byte ptr [rbp-35h], 74h\n0000000140001A4C  mov  byte ptr [rbp-2Eh], 72h\n0000000140001A50  mov  byte ptr [rbp-3Fh], 63h\n0000000140001A54  mov  byte ptr [rbp-32h], 6Eh\n0000000140001A58  mov  byte ptr [rbp-29h], 6Ch\n0000000140001A5C  mov  byte ptr [rbp-33h], 31h\n0000000140001A60  mov  byte ptr [rbp-3Eh], 34h\n0000000140001A64  mov  byte ptr [rbp-2Fh], 5Fh\n0000000140001A68  mov  byte ptr [rbp-28h], 74h\n0000000140001A6C  mov  byte ptr [rbp-3Ch], 73h\n0000000140001A70  mov  byte ptr [rbp-2Bh], 75h\n0000000140001A74  mov  byte ptr [rbp-39h], 63h\n0000000140001A78  mov  byte ptr [rbp-38h], 6Bh\n0000000140001A7C  mov  byte ptr [rbp-40h], 6Eh\n0000000140001A80  mov  byte ptr [rbp-3Dh], 7Bh\n0000000140001A84  mov  byte ptr [rbp-2Ch], 62h\n0000000140001A88  mov  byte ptr [rbp-26h], 00h\n0000000140001A8C  lea  rcx, [rbp-40h]\n0000000140001A90  call sub_140002F10      ; send_beacon(buf)", "mxor_hdr": "1f 20 a9 71 51 7a 39 71 56 7a 39 71 ad 85 39 71", "mxor_str": "3c 19 0d 0a 20 1f 49 42 66 0e 08 1f 35 25 52 42\n2b 25 41 41 20 07 39 71 52 7a 39 71 52 7a 39 71", "ror_targets": {"0xD83D6AA1": "?"}, "ror_hash": "0xD83D6AA1", "ror_check": "0xEC0E4E8E", "ror_cands": ["LoadLibraryA", "GetProcAddress", "VirtualAlloc", "VirtualAllocEx", "VirtualProtect", "WriteProcessMemory", "CreateRemoteThread", "NtUnmapViewOfSection"], "rc4": "76 dc bc 55 ff 61 f3 37 ad 5f e7 09 b2 59 2d d9\nd0 1c 55 d1 fb e3 aa 3b e5 e7 3b fb 19 2e 17 b3\ne9 73 08 06 02 7b 90 c3 fe 52 f8 ba b7 aa cc 29\n7b e1 e7 17 32 4d 4e 8f f4 33 00 88 56 e5 2f 30\ne4 9a 82 9b 60 ad 4b 4e", "rc4_key": "2be4c4723f25966c", "mutex": "Global\\nc4_r4t_once", "cb64_alpha": "P86nq9ahZerUpf5t1T/LOIgDco0klxBEMXSvuHidCQm4WyYFG27NJRVbsK+wA3zj", "cb64": "0g13fNlNpLyika9dtgKvfhyvxDfJpaREfa2G0nTSpbTEcvcJELy40g2WtLP="};
+const HASHES = {"b64twice": "b05ca4ad0f351df6afb0c93d22f8fb047ff0cef6486650d4606ec09cb68f2e7d", "compile": "4a847b9117f29f4196b01ba7cd4e6e23c8ef881aadd34329c396901dccc3980a", "stack": "c293d8b02ac3b955a33654e5bb0cfb1183e80b27466a18a00b47f2e495209e54", "mxor": "2c62e257bff91c7a8ba28dd82eb30346c588471af94ecffe2dba7ab2464f9f83", "task": "461f16ef448194710b67205045051bb7360d4ad17f24ee51fd5e83782655582d", "ror": "7b333fc8f17d318fa927179009e7738793f7c8707accebe5292c7da135c9f34a", "rc4": "f8b7859bd21702b2350f51f1f9c5cca84c93ab15e59fe960f4ba851725e61be6", "hollow": "6edbd9289d9dea73a5af3d475c3bb4fff0cc0f642b25a78f59957e166e6d616f", "cb64": "3f26eac735a4830593e054dcf3fbf2778135b3da884b92df102deff611143083", "magic": "294315b01d80033f78118252e27a71068782784fcf8385135040f334dc9279c4", "hook": "987f9d780c8db6d898336d00862ef5a424f5adb9592fc7fd0570e42f5932c28e", "family": "a0149f3fd010c5633dd3e5c14ba371e84792173a4bc766e90d03f7d34379dcf3"};
+const SALT = "nc4-malware-lab:";
+const TIERS = [
+  {key:"easy",label:"Easy",pts:100,desc:"File basics: magic bytes, imports, encoding and threat intel."},
+  {key:"medium",label:"Medium",pts:200,desc:"Read PE headers and disassembly, break simple XOR, follow obfuscated code."},
+  {key:"hard",label:"Hard",pts:300,desc:"API hashing, RC4 configs, injection techniques and custom encodings."}
+];
+const C = [
+ {id:"magic",lvl:"easy",title:"Wrong Extension",skill:"File signatures",
+  brief:"A user's Downloads folder had four files. One of them pretends to be something it is not. Here are the first 8 bytes of each.",
+  ev:[["xxd -l 8 (first bytes of each file)",
+"photo.jpg     ff d8 ff e0 00 10 4a 46   ......JF\nreport.pdf    25 50 44 46 2d 31 2e 37   %PDF-1.7\nholiday.jpg   4d 5a 90 00 03 00 00 00   MZ......\nbackup.zip    50 4b 03 04 14 00 00 00   PK......"]],
+  q:"Which file is really a Windows executable? Submit as nc4{filename}.",
+  hint:"Every Windows .exe and .dll starts with the two letters MZ (4D 5A). A real JPG starts with FF D8 FF."},
+ {id:"hook",lvl:"easy",title:"Import Gossip",skill:"Import table",
+  brief:"PE-bear lists the imports of a small unknown program. The imports tell you what the program can do.",
+  ev:[["Import table",
+"KERNEL32.dll   CreateFileW, WriteFile, GetTempPathW, Sleep, GetModuleHandleW\nUSER32.dll     SetWindowsHookExA, CallNextHookEx, GetForegroundWindow,\n               GetWindowTextW, MapVirtualKeyA, UnhookWindowsHookEx\nWININET.dll    InternetOpenW, InternetConnectW, FtpPutFileW"]],
+  q:"Which API installs the system-wide hook used to capture keystrokes? Submit as nc4{apiname}.",
+  hint:"Look in USER32.dll for a function with 'Hook' in the name that sets (not calls or removes) a hook."},
+ {id:"b64twice",lvl:"easy",title:"Encoded Twice",skill:"Base64",
+  brief:"This string was found in the registry under HKCU\\Software\\Classes\\nc4cfg. The malware reads it at startup.",
+  ev:[["Registry value 'blob'",D.b64twice]],
+  q:"Decode it fully. What is the flag?",
+  hint:"Decode Base64 once. The result still looks like Base64 (letters, numbers, ends with =). Decode it again."},
+ {id:"family",lvl:"easy",title:"What Family?",skill:"Threat intel",
+  brief:"You uploaded the hash to a multi-AV scanner. Here are some of the detection names.",
+  ev:[["Detections (14/70)",
+"Engine         Detection name\n-------------  ---------------------------------\nVendor-A       Trojan.GenericKD.71123345\nVendor-B       Win32/Spy.AgentTesla.F\nVendor-C       MSIL/AgentTesla.KX!MTB\nVendor-D       Trojan-Spy.MSIL.Agensla.gen\nVendor-E       HEUR/AGEN.1367220\nVendor-F       Spyware.AgentTesla.Generic\nVendor-G       Malicious (score: 100)\nVendor-H       AgentTesla.Stealer.AH"]],
+  q:"Which malware family is this? Submit as nc4{family}.",
+  hint:"Ignore generic names like GenericKD, HEUR or Malicious. Which real name repeats across engines?"},
+
+ {id:"compile",lvl:"medium",title:"Birthday",skill:"PE header",
+  brief:"You want to know when this sample was built. The compile time is stored in the PE file header.",
+  ev:[["hexdump -C sample.exe (first 160 bytes)",D.compile]],
+  q:"What is the compile date (UTC)? Submit as nc4{YYYY-MM-DD}.",
+  hint:"At 0x3C is e_lfanew (4 bytes, little-endian) = where 'PE\\0\\0' starts. After PE\\0\\0 come Machine (2 bytes), NumberOfSections (2 bytes), then TimeDateStamp (4 bytes, little-endian Unix time)."},
+ {id:"stack",lvl:"medium",title:"Stack Builder",skill:"Disassembly",
+  brief:"Strings shows nothing useful, but this function writes bytes onto the stack one by one, then passes the buffer to the beacon function. The writes are out of order on purpose.",
+  ev:[["x64dbg disassembly",D.stack]],
+  q:"What string is built on the stack? Submit the full string.",
+  hint:"The buffer starts at rbp-40h (see the lea). Sort the writes from rbp-40h, rbp-3Fh, rbp-3Eh ... down to rbp-27h, then convert each hex byte to a character."},
+ {id:"mxor",lvl:"medium",title:"Four-Byte Lock",skill:"Multi-byte XOR",
+  brief:"A dropped payload is encrypted with a repeating 4-byte XOR key. We know the payload is a Windows PE once decrypted.",
+  ev:[["Encrypted bytes at offset 0x00",D.mxor_hdr],["Encrypted bytes at offset 0x40",D.mxor_str]],
+  q:"Find the key, then decrypt the bytes at offset 0x40. What is the flag?",
+  hint:"A PE header always starts with 4D 5A 90 00. XOR the first 4 encrypted bytes with 4D 5A 90 00 to get the key. 0x40 is a multiple of 4, so the key lines up again."},
+ {id:"task",lvl:"medium",title:"Backwards Task",skill:"Pseudocode",
+  brief:"Ghidra's decompiler shows how the malware sets up persistence. The strings are stored backwards so they do not show up in a simple search.",
+  ev:[["Ghidra decompiler · FUN_140003a40",
+"void FUN_140003a40(void)\n{\n  char a[] = \"ksaTcnyS\";\n  char b[] = \"etadpUeg\";\n  char c[] = \"dE\";\n  char name[64];\n  char cmd[512];\n\n  _strrev(a);\n  _strrev(b);\n  _strrev(c);\n  sprintf(name, \"%s%s%s\", c, b, a);\n  sprintf(cmd, \"schtasks /create /tn \\\"%s\\\" /tr \\\"%%APPDATA%%\\\\edgeupd.exe\\\" /sc onlogon /f\", name);\n  WinExec(cmd, SW_HIDE);\n  return;\n}"]],
+  q:"What is the name of the scheduled task? Submit as nc4{taskname}.",
+  hint:"_strrev reverses a string. Reverse a, b and c, then join them in the order sprintf uses: c, then b, then a."},
+
+ {id:"ror",lvl:"hard",title:"Hash Resolver",skill:"API hashing",
+  brief:"The shellcode never names the APIs it uses. It walks the export table of kernel32.dll and compares a hash of each name. You recovered the hashing routine and one hash from the code.",
+  ev:[["Hashing routine (pseudocode)",
+"uint32 hash(char *name) {\n  uint32 h = 0;\n  while (*name) {\n    h = ror32(h, 13);   // rotate right by 13 bits\n    h = h + *name;      // add the ASCII value\n    name++;\n  }\n  return h;\n}\n\n// sanity check: hash(\"LoadLibraryA\") == "+D.ror_check],
+  ["Hash found in the code","push "+D.ror_hash+"\ncall resolve_api"],
+  ["Candidate exports",D.ror_cands.join("\n")]],
+  q:"Which API does "+D.ror_hash+" resolve to? Submit as nc4{apiname}.",
+  hint:"Write the function in Python: h = ((h >> 13) | (h << 19)) & 0xFFFFFFFF; h = (h + ord(ch)) & 0xFFFFFFFF. Check it gives the LoadLibraryA value first, then hash each candidate."},
+ {id:"rc4",lvl:"hard",title:"Mutex Key",skill:"RC4 + key derivation",
+  brief:"The RAT's config is RC4-encrypted. Reversing shows the key is not stored anywhere. It is built at runtime from the mutex name.",
+  ev:[["Key derivation (from Ghidra)",
+"mutex = \""+D.mutex.replace(/\\/g,"\\\\")+"\";   // C string, so \\\\ is one backslash\nCreateMutexA(NULL, TRUE, mutex);\nsha256(mutex, strlen(mutex), digest);\nrc4_init(ctx, digest, 8);           // key = first 8 bytes of SHA-256\nrc4_crypt(ctx, cfg_blob, 72);"],
+  ["cfg_blob (72 bytes)",D.rc4]],
+  q:"Decrypt the config. What is the flag in the tag field?",
+  hint:"In CyberChef: SHA2 (256) of Global\\nc4_r4t_once (one backslash), take the first 16 hex characters as the key. Then From Hex → RC4 with that key as HEX."},
+ {id:"hollow",lvl:"hard",title:"Empty Shell",skill:"Injection technique",
+  brief:"A sandbox recorded this API trace from the loader. Some noise calls are removed. Work out which injection technique it uses.",
+  ev:[["API trace (loader.exe, PID 4120)",
+"CreateProcessW( \"C:\\\\Windows\\\\System32\\\\svchost.exe\", ..., CREATE_SUSPENDED ) → PID 5532\nGetThreadContext( hThread 5532 )\nReadProcessMemory( 5532, PEB+0x10 )            ; read ImageBaseAddress\nNtUnmapViewOfSection( 5532, 0x00007FF6A1E00000 )\nVirtualAllocEx( 5532, 0x00007FF6A1E00000, 0x3A000, MEM_COMMIT|MEM_RESERVE, PAGE_EXECUTE_READWRITE )\nWriteProcessMemory( 5532, 0x00007FF6A1E00000, <PE headers> )\nWriteProcessMemory( 5532, 0x00007FF6A1E01000, <.text> )\nWriteProcessMemory( 5532, 0x00007FF6A1E2B000, <.data> )\nSetThreadContext( hThread 5532 )               ; RCX = new entry point\nResumeThread( hThread 5532 )"]],
+  q:"What is the MITRE ATT&CK sub-technique ID? Submit as nc4{Txxxx.xxx}.",
+  hint:"A process is started suspended, its original image is unmapped and replaced, then resumed. This is a Process Injection (T1055) sub-technique with a well-known name."},
+ {id:"cb64",lvl:"hard",title:"Odd Alphabet",skill:"Custom Base64",
+  brief:"The config looks like Base64 but standard decoding gives garbage. A 64-character string in .rdata is used by the decode function.",
+  ev:[[".rdata string at 0x14001F2C0",D.cb64_alpha],["Encoded config",D.cb64]],
+  q:"Decode the config with the right alphabet. What is the flag?",
+  hint:"This is Base64 with a custom alphabet. In CyberChef use From Base64 and paste the .rdata string as the alphabet. In Python, translate each character back to the standard alphabet first."}
+];
+const RANKS=[[0,"Trainee"],[400,"Junior Analyst"],[1000,"Malware Analyst"],[1800,"Senior Analyst"],[2400,"Reverse Engineer"]];
+const ptsOf=c=>TIERS.find(t=>t.key===c.lvl).pts;
+const MAX=C.reduce((a,c)=>a+ptsOf(c),0);
+const KEY="nc4MalwareLab.v1";
+let S={solved:{},hints:{},name:""};
+try{const raw=localStorage.getItem(KEY); if(raw) S=Object.assign(S,JSON.parse(raw));}catch(e){}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
+const $=id=>document.getElementById(id);
+const earned=c=>S.hints[c.id]?Math.floor(ptsOf(c)/2):ptsOf(c);
+let current=null;
+const codeOf=c=>"ML-"+String(C.indexOf(c)+1).padStart(2,"0");
+
+function renderStatus(){
+  const done=C.filter(c=>S.solved[c.id]);
+  const sc=done.reduce((a,c)=>a+earned(c),0);
+  $("score").textContent=sc; $("solvedCount").textContent=done.length+"/"+C.length;
+  let r=RANKS[0][1]; for(const [p,t] of RANKS) if(sc>=p) r=t;
+  if(done.length===C.length) r="Reverse Engineer";
+  $("rank").textContent=r; $("barFill").style.width=(sc/MAX*100)+"%";
+}
+function renderBoard(){
+  const b=$("board"); b.innerHTML="";
+  TIERS.forEach(t=>{
+    const list=C.filter(c=>c.lvl===t.key);
+    const n=list.filter(c=>S.solved[c.id]).length;
+    const sec=document.createElement("div"); sec.className="tier";
+    sec.innerHTML=`<div class="tier-head"><span class="lvl ${t.key}">${t.label}</span><h2>${t.pts} points each</h2><p></p><span class="count">${n}/${list.length} solved</span></div><div class="grid"></div>`;
+    sec.querySelector("p").textContent=t.desc;
+    const g=sec.querySelector(".grid");
+    list.forEach(c=>{
+      const el=document.createElement("button"); el.type="button";
+      el.className="card "+c.lvl+(S.solved[c.id]?" solved":"");
+      el.innerHTML=`<div class="row"><span class="skill"></span><span class="pts">${ptsOf(c)}</span></div><h3></h3><p></p><div class="row"><span class="id">${codeOf(c)}</span>${S.solved[c.id]?'<span class="stamp">SOLVED</span>':""}</div>`;
+      el.querySelector(".skill").textContent=c.skill; el.querySelector("h3").textContent=c.title; el.querySelector("p").textContent=c.q;
+      el.onclick=()=>openC(c); g.appendChild(el);
+    });
+    b.appendChild(sec);
+  });
+}
+function openC(c){
+  current=c; const t=TIERS.find(x=>x.key===c.lvl);
+  $("sLvl").className="lvl "+c.lvl; $("sLvl").textContent=t.label;
+  $("sTitle").textContent=c.title; $("sMeta").textContent=ptsOf(c)+" points · "+c.skill+" · "+codeOf(c);
+  $("sBrief").textContent=c.brief;
+  const ev=$("sEvidence"); ev.innerHTML="";
+  c.ev.forEach(([l,tx])=>{const d=document.createElement("div");d.className="evidence";const lb=document.createElement("label");lb.textContent=l;const p=document.createElement("pre");p.textContent=tx;d.append(lb,p);ev.appendChild(d);});
+  $("sQ").textContent=c.q; $("flagIn").value=""; $("sMsg").textContent=""; $("sMsg").className="msg";
+  $("sHint").textContent="Hint: "+c.hint; $("sHint").hidden=!S.hints[c.id];
+  $("hintBtn").hidden=!!S.hints[c.id]||!!S.solved[c.id];
+  if(S.solved[c.id]){$("sMsg").textContent="Solved. You earned "+earned(c)+" points.";$("sMsg").className="msg ok";}
+  $("overlay").hidden=false; document.body.style.overflow="hidden"; setTimeout(()=>$("flagIn").focus(),30);
+}
+function closeC(){$("overlay").hidden=true;document.body.style.overflow="";current=null;}
+async function sha(s){const d=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(s));return [...new Uint8Array(d)].map(b=>b.toString(16).padStart(2,"0")).join("");}
+$("flagForm").addEventListener("submit",async e=>{
+  e.preventDefault(); if(!current) return;
+  let v=$("flagIn").value.trim(); if(!v){$("sMsg").textContent="Type a flag first.";$("sMsg").className="msg bad";return;}
+  if(!/^nc4\{/i.test(v)) v="nc4{"+v+"}";
+  const ok=(await sha(SALT+v.toLowerCase()))===HASHES[current.id];
+  if(ok){ if(!S.solved[current.id]){S.solved[current.id]=Date.now();save();}
+    $("sMsg").textContent="Correct! +"+earned(current)+" points.";$("sMsg").className="msg ok";$("hintBtn").hidden=true;renderStatus();renderBoard();}
+  else{$("sMsg").textContent="Not correct. Check the format nc4{...} and try again.";$("sMsg").className="msg bad";}
+});
+$("hintBtn").onclick=()=>{if(!current)return;S.hints[current.id]=true;save();$("sHint").hidden=false;$("hintBtn").hidden=true;};
+$("closeBtn").onclick=closeC;
+$("overlay").addEventListener("click",e=>{if(e.target.id==="overlay")closeC();});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("overlay").hidden)closeC();});
+document.querySelectorAll("[role=tab]").forEach(t=>t.onclick=()=>{document.querySelectorAll("[role=tab]").forEach(x=>{x.setAttribute("aria-selected",x===t);$(x.dataset.tab).hidden=x!==t;});});
+$("player").value=S.name||""; $("player").addEventListener("input",e=>{S.name=e.target.value;save();});
+$("resetBtn").onclick=()=>{$("resetConfirm").hidden=false;};
+$("resetNo").onclick=()=>{$("resetConfirm").hidden=true;};
+$("resetYes").onclick=()=>{S.solved={};S.hints={};save();$("resetConfirm").hidden=true;renderStatus();renderBoard();};
+
+/* toolbox */
+const parseHex=s=>(s.replace(/0x/gi,"").match(/[0-9a-f]{2}/gi)||[]).map(x=>parseInt(x,16));
+const show=b=>b.map(x=>x>=32&&x<127||x===10?String.fromCharCode(x):".").join("");
+function b64(){const s=$("b64in").value.replace(/\s/g,"");if(!s){$("b64out").textContent="";return;}
+  try{const by=[...atob(s)].map(c=>c.charCodeAt(0));
+    if($("b64utf16").checked){let o="";for(let i=0;i+1<by.length;i+=2)o+=String.fromCharCode(by[i]|(by[i+1]<<8));$("b64out").textContent=o;}
+    else $("b64out").textContent=show(by);}catch(e){$("b64out").textContent="That is not valid standard Base64.";}}
+$("b64in").oninput=b64; $("b64utf16").onchange=b64;
+function xr(){const by=parseHex($("xorin").value);let k=parseHex($("xorkey").value);if(!k.length)k=[0];$("xorout").textContent=by.length?show(by.map((b,i)=>b^k[i%k.length])):"";}
+$("xorin").oninput=xr; $("xorkey").oninput=xr;
+$("hexin").oninput=()=>{$("hexout").textContent=show(parseHex($("hexin").value));};
+function ts(){let s=$("tsin").value.trim();let n;
+  if($("tsle").checked){const b=parseHex(s);if(b.length!==4){$("tsout").textContent="Paste exactly 4 bytes, e.g. 00 10 5e 5f";return;}n=(b[0]|(b[1]<<8)|(b[2]<<16)|(b[3]<<24))>>>0;}
+  else n=/^0x/i.test(s)?parseInt(s,16):parseInt(s,10);
+  if(isNaN(n)){$("tsout").textContent="Enter a number like 1600000000 or 0x5F5E1000.";return;}
+  $("tsout").textContent="0x"+n.toString(16).toUpperCase()+" = "+new Date(n*1000).toISOString().replace("T"," ").slice(0,19)+" UTC";}
+$("tsin").oninput=ts;$("tsle").onchange=ts;ts();
+
+renderStatus();renderBoard();
+</script>
+
+</body>
+</html>
